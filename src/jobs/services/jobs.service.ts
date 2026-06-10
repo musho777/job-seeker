@@ -68,6 +68,7 @@ export class JobsService {
             staffAmJob.companiesStruct?.title?.en ||
             staffAmJob.companiesStruct?.title?.ru ||
             'Unknown',
+          companyId: staffAmJob.companiesStruct?.id || 0,
           title: staffAmJob.title?.en || staffAmJob.title?.ru || 'No Title',
           description: `Deadline: ${staffAmJob.deadline || 'N/A'}`,
           isApplying: false,

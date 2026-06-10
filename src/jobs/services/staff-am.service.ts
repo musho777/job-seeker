@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import FormData = require('form-data');
+import * as fs from 'fs';
+import * as path from 'path';
+import { ApplyJobDto } from '../dto/apply-job.dto';
 
 export interface StaffAmJob {
   id: number;
@@ -116,6 +120,145 @@ export class StaffAmService {
       return uniqueJobs;
     } catch (error) {
       this.logger.error('Failed to fetch jobs from staff.am', error);
+      throw error;
+    }
+  }
+
+  async applyToJob(applicationData: ApplyJobDto): Promise<any> {
+    try {
+      this.logger.log(
+        `Applying to job: ${applicationData.job_announcement_title} (ID: ${applicationData.job_announcement_id})`,
+      );
+
+      // Default applicant data
+      const defaultData = {
+        first_name: 'Mush',
+        last_name: 'Poghosyan',
+        email: 'mushopoghosyan7@gmail.com',
+        phone: '+374 93 613007',
+      };
+
+      // Merge with provided data (provided data takes precedence)
+      const applicantData = {
+        first_name: applicationData.first_name || defaultData.first_name,
+        last_name: applicationData.last_name || defaultData.last_name,
+        email: applicationData.email || defaultData.email,
+        phone: applicationData.phone || defaultData.phone,
+        cover_letter: applicationData.cover_letter || '',
+      };
+
+      // Path to CV file
+      const cvPath = path.join(
+        __dirname,
+        '..',
+        '..',
+        'assets',
+        'Mush_Poghosyan.pdf',
+      );
+
+      // Check if CV file exists
+      if (!fs.existsSync(cvPath)) {
+        throw new Error(`CV file not found at: ${cvPath}`);
+      }
+
+      // Create form data
+      const form = new FormData();
+      form.append('first_name', applicantData.first_name);
+      form.append('last_name', applicantData.last_name);
+      form.append('email', applicantData.email);
+      form.append('phone', applicantData.phone);
+      form.append('cover_letter', applicantData.cover_letter);
+      form.append('hidden_companies', '');
+      form.append('companyId', applicationData.companyId.toString());
+      form.append(
+        'job_announcement_id',
+        applicationData.job_announcement_id.toString(),
+      );
+      form.append(
+        'job_announcement_title',
+        applicationData.job_announcement_title,
+      );
+      form.append('selectedOption', 'null');
+      form.append('file_id', '0');
+      form.append('apply_type', 'WITH_CV');
+
+      // Read CV file and append it twice (as per the original request)
+      const cvBuffer = fs.readFileSync(cvPath);
+      form.append('cv', cvBuffer, {
+        filename: 'Mush_Poghosyan.pdf',
+        contentType: 'application/pdf',
+      });
+      form.append('ApplyAsGuestForm[cv]', cvBuffer, {
+        filename: 'Mush_Poghosyan.pdf',
+        contentType: 'application/pdf',
+      });
+
+      // Submit application
+      const applyUrl =
+        'https://api.staff.am/ru/v4/applicant/apply?Content-Type=multipart%2Fform-data';
+
+      const response = await firstValueFrom(
+        this.httpService.post(applyUrl, form, {
+          headers: {
+            ...form.getHeaders(),
+            accept: 'application/json, text/plain, */*',
+            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7,hy;q=0.6',
+            apptype: 'web',
+            guestauth: 'web-guest',
+            origin: 'https://staff.am',
+            referer: 'https://staff.am/',
+            systemname: 'web',
+          },
+        }),
+      );
+
+      this.logger.log(
+        `Successfully applied to job: ${applicationData.job_announcement_title}`,
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error('Failed to apply to job', error);
+
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+
+        this.logger.error('Response status:', status);
+        this.logger.error('Response data:', JSON.stringify(data));
+
+        // Create a user-friendly error message
+        let errorMessage = 'Failed to submit application';
+        let errorDetails = data;
+
+        if (status === 422) {
+          // Validation error
+          if (Array.isArray(data)) {
+            errorMessage = data.map(err => err.message).join(', ');
+          } else {
+            errorMessage = 'Invalid application data';
+          }
+        } else if (status === 403) {
+          // Forbidden - already applied or access denied
+          if (data.message) {
+            errorMessage = data.message === 'Кандидат уже откликался на данную вакансию'
+              ? 'You have already applied to this job'
+              : data.message;
+          } else {
+            errorMessage = 'Access denied or already applied';
+          }
+        } else if (status === 404) {
+          errorMessage = 'Job not found or no longer available';
+        } else if (status >= 500) {
+          errorMessage = 'Server error, please try again later';
+        }
+
+        // Throw a structured error
+        const structuredError: any = new Error(errorMessage);
+        structuredError.statusCode = status;
+        structuredError.response = errorDetails;
+        throw structuredError;
+      }
+
       throw error;
     }
   }

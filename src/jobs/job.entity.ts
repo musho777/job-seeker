@@ -25,6 +25,13 @@ export class Job {
   company!: string;
 
   @ApiProperty({
+    description: 'Company ID from the source platform',
+    example: 1594,
+  })
+  @Column({ default: 0 })
+  companyId!: number;
+
+  @ApiProperty({
     description: 'Job title',
     example: 'Senior Frontend Developer (React+Angular)',
   })

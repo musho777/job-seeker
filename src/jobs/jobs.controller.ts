@@ -138,7 +138,10 @@ export class JobsController {
     schema: {
       properties: {
         statusCode: { type: 'number', example: 403 },
-        message: { type: 'string', example: 'You have already applied to this job' },
+        message: {
+          type: 'string',
+          example: 'You have already applied to this job',
+        },
         error: { type: 'string', example: 'Forbidden' },
       },
     },
@@ -164,9 +167,10 @@ export class JobsController {
   })
   async applyToJob(
     @Body() applicationData: ApplyJobDto,
-  ): Promise<{ message: string; data: any }> {
+  ): Promise<{ message: string; data: unknown }> {
     try {
-      const result = await this.staffAmService.applyToJob(applicationData);
+      const result: unknown =
+        await this.staffAmService.applyToJob(applicationData);
 
       // Update the job's isApplying status to true
       const sourceId = applicationData.job_announcement_id.toString();
@@ -180,9 +184,9 @@ export class JobsController {
         message: 'Application submitted successfully',
         data: result,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Handle structured errors from the service
-      if (error.statusCode) {
+      if (this.isStructuredError(error)) {
         throw new HttpException(
           {
             statusCode: error.statusCode,
@@ -198,12 +202,26 @@ export class JobsController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'An unexpected error occurred while submitting the application',
+          message:
+            'An unexpected error occurred while submitting the application',
           error: 'Internal Server Error',
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private isStructuredError(
+    error: unknown,
+  ): error is { statusCode: number; message: string; response: unknown } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'statusCode' in error &&
+      typeof error.statusCode === 'number' &&
+      'message' in error &&
+      typeof (error as { message: unknown }).message === 'string'
+    );
   }
 
   private getErrorName(statusCode: number): string {

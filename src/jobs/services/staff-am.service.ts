@@ -124,7 +124,7 @@ export class StaffAmService {
     }
   }
 
-  async applyToJob(applicationData: ApplyJobDto): Promise<any> {
+  async applyToJob(applicationData: ApplyJobDto): Promise<unknown> {
     try {
       this.logger.log(
         `Applying to job: ${applicationData.job_announcement_title} (ID: ${applicationData.job_announcement_id})`,
@@ -253,7 +253,10 @@ export class StaffAmService {
         }
 
         // Throw a structured error
-        const structuredError: any = new Error(errorMessage);
+        const structuredError = new Error(errorMessage) as Error & {
+          statusCode: number;
+          response: unknown;
+        };
         structuredError.statusCode = status;
         structuredError.response = errorDetails;
         throw structuredError;

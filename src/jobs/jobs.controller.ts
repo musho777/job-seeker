@@ -167,6 +167,15 @@ export class JobsController {
   ): Promise<{ message: string; data: any }> {
     try {
       const result = await this.staffAmService.applyToJob(applicationData);
+
+      // Update the job's isApplying status to true
+      const sourceId = applicationData.job_announcement_id.toString();
+      const job = await this.jobsService.findBySourceId(sourceId);
+
+      if (job) {
+        await this.jobsService.update(job.id, { isApplying: true });
+      }
+
       return {
         message: 'Application submitted successfully',
         data: result,
